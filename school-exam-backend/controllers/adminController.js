@@ -415,12 +415,16 @@ exports.getResultReleaseList = (req,res)=>{
 db.query(
 `SELECT e.id,
         e.title,
+        e.class_id,
         e.exam_date,
         e.total_marks,
         c.class_name,
         s.subject_name,
         u.name AS teacher_name,
         COALESCE(a.assigned_count, 0) AS assigned_count,
+        COALESCE(a.class_assignment_count, 0) AS class_assignment_count,
+        COALESCE(a.single_student_count, 0) AS single_student_count,
+        COALESCE(a.assigned_students, '') AS assigned_students,
         COALESCE(r.submitted_count, 0) AS submitted_count,
         COALESCE(r.released_count, 0) AS released_count
  FROM exams e
@@ -429,9 +433,22 @@ db.query(
  LEFT JOIN teachers t ON t.id = e.teacher_id
  LEFT JOIN users u ON u.id = t.user_id
  LEFT JOIN (
-   SELECT exam_id, COUNT(*) AS assigned_count
-   FROM exam_assignments
-   GROUP BY exam_id
+   SELECT ea.exam_id,
+          COUNT(*) AS assigned_count,
+          SUM(CASE WHEN ea.student_id IS NULL THEN 1 ELSE 0 END) AS class_assignment_count,
+          SUM(CASE WHEN ea.student_id IS NOT NULL THEN 1 ELSE 0 END) AS single_student_count,
+          GROUP_CONCAT(
+            DISTINCT CASE
+              WHEN ea.student_id IS NOT NULL THEN
+                CONCAT(su.name, ' (', COALESCE(st.roll_number, 'No roll'), ')')
+              ELSE NULL
+            END
+            SEPARATOR ', '
+          ) AS assigned_students
+   FROM exam_assignments ea
+   LEFT JOIN students st ON st.id = ea.student_id
+   LEFT JOIN users su ON su.id = st.user_id
+   GROUP BY ea.exam_id
  ) a ON a.exam_id = e.id
  LEFT JOIN (
    SELECT exam_id,
