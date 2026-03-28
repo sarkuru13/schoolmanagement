@@ -31,7 +31,8 @@ const token = jwt.sign(
 
 res.json({
 token,
-role:user.role
+role:user.role,
+name:user.name
 });
 
 });

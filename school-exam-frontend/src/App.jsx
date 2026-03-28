@@ -5,7 +5,7 @@ import Login from "./pages/Login";
 import RegisterAdmin from "./pages/RegisterAdmin";
 
 // Admin
-import AdminDashboard from "./pages/AdminDashboard"; // Admin Layout Wrapper
+import AdminDashboard from "./pages/AdminDashboard";
 import Dashboard from "./pages/admin/Dashboard";
 import Classes from "./pages/admin/Classes";
 import Subjects from "./pages/admin/Subjects";
@@ -14,22 +14,29 @@ import Students from "./pages/admin/Students";
 import Results from "./pages/admin/Results";
 
 // Teacher
-import TeacherDashboard from "./pages/TeacherDashboard"; // Teacher Layout Wrapper
+import TeacherDashboard from "./pages/TeacherDashboard";
 import TeacherDashboardHome from "./pages/teacher/Dashboard";
+import TeacherClasses from "./pages/teacher/Classes";
+import TeacherExams from "./pages/teacher/Exams";
+import ExamCreate from "./pages/teacher/ExamCreate";
+import ExamDetail from "./pages/teacher/ExamDetail";
+
+// Student
+import StudentDashboard from "./pages/StudentDashboard";
+import StudentDashboardHome from "./pages/student/Dashboard";
+import StudentExams from "./pages/student/Exams";
+import ExamTake from "./pages/student/ExamTake";
+import StudentResults from "./pages/student/Results";
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Auth Routes */}
         <Route path="/" element={<Login />} />
         <Route path="/register-admin" element={<RegisterAdmin />} />
 
-        {/* --- Admin Routes --- */}
         <Route path="/admin" element={<AdminDashboard />}>
-          {/* THIS LINE FIXES THE BLANK PAGE: It auto-redirects /admin to /admin/dashboard */}
           <Route index element={<Navigate to="dashboard" replace />} />
-          
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="classes" element={<Classes />} />
           <Route path="subjects" element={<Subjects />} />
@@ -38,14 +45,22 @@ export default function App() {
           <Route path="results" element={<Results />} />
         </Route>
 
-        {/* --- Teacher Routes --- */}
         <Route path="/teacher" element={<TeacherDashboard />}>
-          {/* Default redirect for /teacher goes to /teacher/dashboard */}
           <Route index element={<TeacherDashboardHome />} />
           <Route path="dashboard" element={<TeacherDashboardHome />} />
-          {/* Add more teacher routes here like "classes" or "exams" in the future */}
+          <Route path="classes" element={<TeacherClasses />} />
+          <Route path="exams" element={<TeacherExams />} />
+          <Route path="exams/new" element={<ExamCreate />} />
+          <Route path="exams/:id" element={<ExamDetail />} />
         </Route>
 
+        <Route path="/student" element={<StudentDashboard />}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<StudentDashboardHome />} />
+          <Route path="exams" element={<StudentExams />} />
+          <Route path="exams/:id/take" element={<ExamTake />} />
+          <Route path="results" element={<StudentResults />} />
+        </Route>
       </Routes>
     </BrowserRouter>
   );

@@ -20,6 +20,11 @@ export default function Login() {
       // Assuming your backend returns { token, role, user: {...} }
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("role", res.data.role);
+      if (res.data.name) {
+        localStorage.setItem("userName", res.data.name);
+      } else {
+        localStorage.removeItem("userName");
+      }
 
       // Redirect based on the authenticated user's role
       if (res.data.role === "admin") {

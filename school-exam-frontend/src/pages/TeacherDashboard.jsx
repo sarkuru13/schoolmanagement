@@ -7,6 +7,7 @@ export default function TeacherDashboard() {
   const handleLogout = () => {
     localStorage.removeItem("token");
     localStorage.removeItem("role");
+    localStorage.removeItem("userName");
     navigate("/");
   };
 
@@ -26,7 +27,10 @@ export default function TeacherDashboard() {
         </div>
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
           {navLinks.map((link) => {
-            const isActive = location.pathname.startsWith(link.path);
+            const isActive =
+              link.path === "/teacher/dashboard"
+                ? location.pathname === "/teacher" || location.pathname.startsWith("/teacher/dashboard")
+                : location.pathname.startsWith(link.path);
             return (
               <Link
                 key={link.name}
