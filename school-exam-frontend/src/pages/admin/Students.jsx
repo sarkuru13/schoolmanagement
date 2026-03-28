@@ -17,6 +17,7 @@ export default function Students() {
   const [password, setPassword] = useState("");
   const [roll, setRoll] = useState("");
   const [classId, setClassId] = useState("");
+  const [passwordResettingId, setPasswordResettingId] = useState(null);
 
   /* ---------- LOAD DATA ---------- */
   useEffect(() => {
@@ -101,6 +102,21 @@ export default function Students() {
     setIsModalOpen(true);
   };
 
+  const resetStudentPassword = async (student) => {
+    const newPassword = window.prompt(`Enter a new password for ${student.name}:`, "");
+    if (newPassword === null) return;
+
+    setPasswordResettingId(student.id);
+    try {
+      await API.post(`/admin/student/${student.id}/reset-password`, { password: newPassword });
+      alert("Student password updated successfully.");
+    } catch (err) {
+      alert(err.response?.data?.message || "Could not update student password.");
+    } finally {
+      setPasswordResettingId(null);
+    }
+  };
+
   /* ---------- RESET ---------- */
   const resetForm = () => {
     setEditId(null);
@@ -181,7 +197,7 @@ export default function Students() {
                 <th className="p-4">Student Info</th>
                 <th className="p-4">Class</th>
                 <th className="p-4">Roll No.</th>
-                <th className="p-4 pr-6 text-right w-40">Actions</th>
+                <th className="p-4 pr-6 text-right w-56">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -207,6 +223,13 @@ export default function Students() {
                     </td>
 
                     <td className="p-4 pr-6 flex justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
+                      <button
+                        className="text-sm bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded-md transition-colors shadow-sm disabled:opacity-50"
+                        onClick={() => resetStudentPassword(s)}
+                        disabled={passwordResettingId === s.id}
+                      >
+                        {passwordResettingId === s.id ? "Saving..." : "Reset password"}
+                      </button>
                       <button
                         className="text-sm bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded-md transition-colors shadow-sm"
                         onClick={() => startEdit(s)}

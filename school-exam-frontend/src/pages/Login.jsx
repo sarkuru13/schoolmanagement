@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "../api/axios";
 
@@ -8,6 +8,41 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const res = await API.get("/auth/me");
+        if (cancelled || !res.data?.role) return;
+
+        localStorage.setItem("role", res.data.role);
+        if (res.data.name) {
+          localStorage.setItem("userName", res.data.name);
+        }
+
+        if (res.data.role === "admin") {
+          navigate("/admin/dashboard", { replace: true });
+        } else if (res.data.role === "teacher") {
+          navigate("/teacher/dashboard", { replace: true });
+        } else if (res.data.role === "student") {
+          navigate("/student/dashboard", { replace: true });
+        }
+      } catch {
+        // No active session found, stay on the login page.
+      } finally {
+        if (!cancelled) {
+          setCheckingSession(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -43,6 +78,17 @@ export default function Login() {
       setLoading(false);
     }
   };
+
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-lg border border-gray-100 p-8 text-center">
+          <p className="text-sm font-medium text-gray-500 uppercase tracking-[0.25em]">Session</p>
+          <p className="text-xl font-bold text-gray-900 mt-3">Checking your login...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">

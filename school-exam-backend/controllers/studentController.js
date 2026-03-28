@@ -144,3 +144,34 @@ exports.getResults = (req, res) => {
     );
   });
 };
+
+exports.getSubjects = (req, res) => {
+  const user_id = req.user.id;
+
+  db.query(
+    `SELECT s.class_id, c.class_name
+     FROM students s
+     JOIN classes c ON c.id = s.class_id
+     WHERE s.user_id = ?`,
+    [user_id],
+    (err, studentRows) => {
+      if (err) return res.status(500).json(err);
+      if (!studentRows.length) return res.json([]);
+
+      const classId = studentRows[0].class_id;
+
+      db.query(
+        `SELECT sub.id, sub.subject_name, sub.class_id, sub.syllabus_link, c.class_name
+         FROM subjects sub
+         JOIN classes c ON c.id = sub.class_id
+         WHERE sub.class_id = ?
+         ORDER BY sub.subject_name ASC`,
+        [classId],
+        (err2, rows) => {
+          if (err2) return res.status(500).json(err2);
+          res.json(rows);
+        }
+      );
+    }
+  );
+};

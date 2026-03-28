@@ -5,6 +5,7 @@ const role = require("../middleware/roleMiddleware");
 
 router.get("/exams/:examId/attempt", auth, role("student"), student.getExamAttempt);
 router.get("/exams", auth, role("student"), student.getExams);
+router.get("/subjects", auth, role("student"), student.getSubjects);
 router.post("/submit", auth, role("student"), student.submitExam);
 router.get("/results", auth, role("student"), student.getResults);
 

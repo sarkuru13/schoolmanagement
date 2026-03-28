@@ -2,6 +2,60 @@ const db = require("../config/db");
 const bcrypt = require("bcryptjs");
 const { ensureExamWorkflowSchema, runQuery } = require("../utils/examWorkflowSchema");
 
+exports.getDashboardStats = async (req, res) => {
+  try {
+    await ensureExamWorkflowSchema();
+
+    const [
+      studentRows,
+      teacherRows,
+      classRows,
+      subjectRows,
+      examRows,
+      resultRows,
+      pendingReexamRows,
+      recentRequests,
+    ] = await Promise.all([
+      runQuery("SELECT COUNT(*) AS count FROM students"),
+      runQuery("SELECT COUNT(*) AS count FROM teachers"),
+      runQuery("SELECT COUNT(*) AS count FROM classes"),
+      runQuery("SELECT COUNT(*) AS count FROM subjects"),
+      runQuery("SELECT COUNT(*) AS count FROM exams"),
+      runQuery("SELECT COUNT(*) AS count FROM results"),
+      runQuery("SELECT COUNT(*) AS count FROM reexam_requests WHERE status = 'pending'"),
+      runQuery(
+        `SELECT rr.id,
+                rr.status,
+                rr.requested_at,
+                e.title AS exam_title,
+                student_user.name AS student_name,
+                teacher_user.name AS teacher_name
+         FROM reexam_requests rr
+         JOIN exams e ON e.id = rr.exam_id
+         JOIN students st ON st.id = rr.student_id
+         JOIN users student_user ON student_user.id = st.user_id
+         JOIN teachers t ON t.id = rr.teacher_id
+         JOIN users teacher_user ON teacher_user.id = t.user_id
+         ORDER BY rr.requested_at DESC
+         LIMIT 5`
+      ),
+    ]);
+
+    res.json({
+      students: studentRows[0]?.count || 0,
+      teachers: teacherRows[0]?.count || 0,
+      classes: classRows[0]?.count || 0,
+      subjects: subjectRows[0]?.count || 0,
+      exams: examRows[0]?.count || 0,
+      submissions: resultRows[0]?.count || 0,
+      pending_reexam_requests: pendingReexamRows[0]?.count || 0,
+      recent_reexam_requests: recentRequests,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Could not load dashboard stats" });
+  }
+};
+
 /* ---------- CLASS MANAGEMENT ---------- */
 
 exports.createClass = (req,res)=>{
@@ -66,11 +120,11 @@ res.json({message:"Class deleted"});
 
 exports.addSubject = (req,res)=>{
 
-const {subject_name,class_id} = req.body;
+const {subject_name,class_id,syllabus_link} = req.body;
 
 db.query(
-"INSERT INTO subjects(subject_name,class_id) VALUES(?,?)",
-[subject_name,class_id],
+"INSERT INTO subjects(subject_name,class_id,syllabus_link) VALUES(?,?,?)",
+[subject_name,class_id,(syllabus_link || "").trim() || null],
 (err)=>{
 if(err) return res.status(500).json(err);
 res.json({message:"Subject created"});
@@ -85,6 +139,7 @@ db.query(
 `SELECT subjects.id,
         subjects.subject_name,
         subjects.class_id,
+        subjects.syllabus_link,
         classes.class_name
  FROM subjects
  LEFT JOIN classes ON subjects.class_id = classes.id`,
@@ -101,7 +156,14 @@ exports.getSubjectsByClass = (req,res)=>{
 const {class_id} = req.params;
 
 db.query(
-"SELECT * FROM subjects WHERE class_id=?",
+`SELECT subjects.id,
+        subjects.subject_name,
+        subjects.class_id,
+        subjects.syllabus_link,
+        classes.class_name
+ FROM subjects
+ JOIN classes ON classes.id = subjects.class_id
+ WHERE subjects.class_id=?`,
 [class_id],
 (err,result)=>{
 if(err) return res.status(500).json(err);
@@ -113,11 +175,11 @@ res.json(result);
 
 exports.updateSubject = (req,res)=>{
 
-const {id,subject_name,class_id} = req.body;
+const {id,subject_name,class_id,syllabus_link} = req.body;
 
 db.query(
-"UPDATE subjects SET subject_name=?, class_id=? WHERE id=?",
-[subject_name,class_id,id],
+"UPDATE subjects SET subject_name=?, class_id=?, syllabus_link=? WHERE id=?",
+[subject_name,class_id,(syllabus_link || "").trim() || null,id],
 (err)=>{
 if(err) return res.status(500).json(err);
 res.json({message:"Subject updated"});
@@ -192,7 +254,7 @@ res.json({message:"Teacher created"});
 exports.getTeachers = (req,res)=>{
 
 db.query(
-`SELECT teachers.id, users.name, teachers.specialization
+`SELECT teachers.id, users.name, users.email, teachers.specialization
  FROM teachers
  JOIN users ON teachers.user_id = users.id`,
 (err,result)=>{
@@ -408,6 +470,50 @@ res.json({message:"Student deleted"});
 
 };
 
+exports.resetTeacherPassword = async (req, res) => {
+  const { id } = req.params;
+  const { password } = req.body;
+
+  if (!password || String(password).trim().length < 4) {
+    return res.status(400).json({ message: "Password must be at least 4 characters." });
+  }
+
+  try {
+    const teacherRows = await runQuery("SELECT user_id FROM teachers WHERE id = ?", [id]);
+    if (!teacherRows.length) {
+      return res.status(404).json({ message: "Teacher not found." });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+    await runQuery("UPDATE users SET password = ? WHERE id = ?", [hash, teacherRows[0].user_id]);
+    res.json({ message: "Teacher password updated." });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Could not update teacher password" });
+  }
+};
+
+exports.resetStudentPassword = async (req, res) => {
+  const { id } = req.params;
+  const { password } = req.body;
+
+  if (!password || String(password).trim().length < 4) {
+    return res.status(400).json({ message: "Password must be at least 4 characters." });
+  }
+
+  try {
+    const studentRows = await runQuery("SELECT user_id FROM students WHERE id = ?", [id]);
+    if (!studentRows.length) {
+      return res.status(404).json({ message: "Student not found." });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+    await runQuery("UPDATE users SET password = ? WHERE id = ?", [hash, studentRows[0].user_id]);
+    res.json({ message: "Student password updated." });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Could not update student password" });
+  }
+};
+
 
 /* ---------- RESULT MANAGEMENT ---------- */
 
@@ -467,6 +573,21 @@ res.json(result);
 
 };
 
+exports.unassignTeacher = (req,res)=>{
+
+const {teacher_id,subject_id,class_id} = req.body;
+
+db.query(
+"DELETE FROM teacher_assignments WHERE teacher_id=? AND subject_id=? AND class_id=?",
+[teacher_id,subject_id,class_id],
+(err)=>{
+if(err) return res.status(500).json(err);
+res.json({message:"Teacher unassigned"});
+}
+);
+
+};
+
 exports.releaseResult = (req,res)=>{
 
 const {exam_id} = req.body;
@@ -515,6 +636,43 @@ exports.getResultsExport = async (req, res) => {
     res.json(rows);
   } catch (error) {
     res.status(500).json({ message: error.message || "Could not prepare result export" });
+  }
+};
+
+exports.getExamScores = async (req, res) => {
+  const examId = req.params.examId;
+
+  try {
+    const rows = await runQuery(
+      `SELECT r.id,
+              r.score,
+              r.released,
+              e.id AS exam_id,
+              e.title,
+              e.total_marks,
+              e.exam_date,
+              c.class_name,
+              s.subject_name,
+              teacher_user.name AS teacher_name,
+              student_user.name AS student_name,
+              student_user.email AS student_email,
+              st.roll_number
+       FROM results r
+       JOIN exams e ON e.id = r.exam_id
+       JOIN students st ON st.id = r.student_id
+       JOIN users student_user ON student_user.id = st.user_id
+       JOIN classes c ON c.id = e.class_id
+       JOIN subjects s ON s.id = e.subject_id
+       LEFT JOIN teachers t ON t.id = e.teacher_id
+       LEFT JOIN users teacher_user ON teacher_user.id = t.user_id
+       WHERE r.exam_id = ?
+       ORDER BY student_user.name ASC`,
+      [examId]
+    );
+
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Could not load exam scores" });
   }
 };
 

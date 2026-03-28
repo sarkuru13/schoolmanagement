@@ -1,18 +1,27 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
+import API from "../api/axios";
 
 export default function StudentDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
+  const isExamMode = /^\/student\/exams\/[^/]+\/take$/.test(location.pathname);
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    localStorage.removeItem("userName");
-    navigate("/");
+  const handleLogout = async () => {
+    try {
+      await API.post("/auth/logout");
+    } catch {
+      // Ignore logout API failures and still clear local client state.
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("userName");
+      navigate("/");
+    }
   };
 
   const navLinks = [
     { name: "Dashboard", path: "/student/dashboard" },
+    { name: "My subjects", path: "/student/subjects" },
     { name: "My exams", path: "/student/exams" },
     { name: "Results", path: "/student/results" },
   ];
@@ -26,6 +35,14 @@ export default function StudentDashboard() {
     }
     return location.pathname === path || location.pathname.startsWith(`${path}/`);
   };
+
+  if (isExamMode) {
+    return (
+      <main className="min-h-screen bg-slate-950">
+        <Outlet />
+      </main>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-gray-50">

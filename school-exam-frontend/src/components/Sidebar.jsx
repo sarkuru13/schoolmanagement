@@ -1,97 +1,66 @@
-import { Link, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
+import API from "../api/axios";
+
+const links = [
+  { to: "/admin/dashboard", label: "Dashboard" },
+  { to: "/admin/classes", label: "Classes" },
+  { to: "/admin/subjects", label: "Subjects" },
+  { to: "/admin/teachers", label: "Teachers" },
+  { to: "/admin/students", label: "Students" },
+  { to: "/admin/results", label: "Results" },
+  { to: "/admin/reexam-requests", label: "Re-exams" },
+];
 
 export default function Sidebar() {
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    localStorage.removeItem("userName");
-    navigate("/");
+  const handleLogout = async () => {
+    try {
+      await API.post("/auth/logout");
+    } catch {
+      // Ignore logout API failures and still clear local client state.
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("userName");
+      navigate("/");
+    }
   };
 
   return (
-    <div className="w-64 h-screen bg-gray-900 text-white p-6 flex flex-col">
-      <h2 className="text-xl font-bold mb-10">Admin Panel</h2>
+    <aside className="w-72 h-screen shrink-0 bg-slate-950 text-white flex flex-col border-r border-slate-800">
+      <div className="px-6 py-6 border-b border-slate-800">
+        <p className="text-xs uppercase tracking-[0.28em] text-slate-400">Administration</p>
+        <h2 className="text-2xl font-black tracking-tight mt-2">School Exam System</h2>
+      </div>
 
-      <ul className="space-y-4 flex-1">
-        <li>
-          <Link
-            to="/admin"
-            className="text-gray-300 hover:text-white transition-colors"
+      <nav className="flex-1 overflow-y-auto px-4 py-5 space-y-2">
+        {links.map((link) => (
+          <NavLink
+            key={link.to}
+            to={link.to}
+            className={({ isActive }) =>
+              `flex items-center rounded-xl px-4 py-3 text-sm font-semibold transition ${
+                isActive
+                  ? "bg-blue-600 text-white shadow-lg shadow-blue-950/30"
+                  : "text-slate-300 hover:bg-slate-900 hover:text-white"
+              }`
+            }
           >
-            Dashboard
-          </Link>
-        </li>
+            {link.label}
+          </NavLink>
+        ))}
+      </nav>
 
-        <li>
-          <Link
-            to="/admin/classes"
-            className="text-gray-300 hover:text-white transition-colors"
-          >
-            Classes
-          </Link>
-        </li>
-
-        <li>
-          <Link
-            to="/admin/subjects"
-            className="text-gray-300 hover:text-white transition-colors"
-          >
-            Subjects
-          </Link>
-        </li>
-
-        <li>
-          <Link
-            to="/admin/teachers"
-            className="text-gray-300 hover:text-white transition-colors"
-          >
-            Teachers
-          </Link>
-        </li>
-
-        <li>
-          <Link
-            to="/admin/students"
-            className="text-gray-300 hover:text-white transition-colors"
-          >
-            Students
-          </Link>
-        </li>
-
-        <li>
-          <Link
-            to="/admin/results"
-            className="text-gray-300 hover:text-white transition-colors"
-          >
-            Results
-          </Link>
-        </li>
-      </ul>
-
-      <div className="pt-4 border-t border-gray-700">
+      <div className="p-4 border-t border-slate-800">
         <button
           type="button"
           onClick={handleLogout}
-          className="flex items-center w-full px-3 py-2.5 text-sm font-medium text-red-400 rounded-lg hover:bg-gray-800 hover:text-red-300 transition-colors"
+          className="w-full rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300 hover:bg-red-500/20"
         >
-          <svg
-            className="mr-3 h-5 w-5 text-red-400 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-            />
-          </svg>
           Logout
         </button>
       </div>
-    </div>
+    </aside>
   );
 }

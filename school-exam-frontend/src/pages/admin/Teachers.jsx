@@ -7,6 +7,7 @@ export default function Teachers() {
   const [subjects, setSubjects] = useState([]);
   const [teachers, setTeachers] = useState([]); // Currently assigned teachers
   const [allTeachers, setAllTeachers] = useState([]); // Every teacher in the system
+  const [passwordResettingId, setPasswordResettingId] = useState(null);
 
   const [classId, setClassId] = useState("");
   const [subjectId, setSubjectId] = useState("");
@@ -34,6 +35,21 @@ export default function Teachers() {
       setAllTeachers(t.data);
     } catch (error) {
       console.log("Error loading initial data:", error);
+    }
+  };
+
+  const resetTeacherPassword = async (teacher) => {
+    const newPassword = window.prompt(`Enter a new password for ${teacher.name}:`, "");
+    if (newPassword === null) return;
+
+    setPasswordResettingId(teacher.id);
+    try {
+      await API.post(`/admin/teacher/${teacher.id}/reset-password`, { password: newPassword });
+      alert("Teacher password updated successfully.");
+    } catch (err) {
+      alert(err.response?.data?.message || "Could not update teacher password.");
+    } finally {
+      setPasswordResettingId(null);
     }
   };
 
@@ -415,6 +431,47 @@ export default function Teachers() {
           </div>
         </div>
       )}
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-8">
+        <div className="p-6 border-b border-gray-200">
+          <h2 className="text-xl font-bold text-gray-900">All Teachers</h2>
+          <p className="text-sm text-gray-500 mt-1">Full teacher directory with specialization and password reset option.</p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200 text-xs uppercase tracking-wider text-gray-500 font-semibold">
+                <th className="p-4 pl-6">ID</th>
+                <th className="p-4">Teacher</th>
+                <th className="p-4">Email</th>
+                <th className="p-4">Specialization</th>
+                <th className="p-4 pr-6 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {allTeachers.map((teacher) => (
+                <tr key={teacher.id} className="hover:bg-gray-50">
+                  <td className="p-4 pl-6 text-sm text-gray-500">#{teacher.id}</td>
+                  <td className="p-4 font-medium text-gray-900">{teacher.name}</td>
+                  <td className="p-4 text-sm text-gray-600">{teacher.email || "-"}</td>
+                  <td className="p-4 text-sm text-gray-600">{teacher.specialization || "General"}</td>
+                  <td className="p-4 pr-6 text-right">
+                    <button
+                      type="button"
+                      disabled={passwordResettingId === teacher.id}
+                      onClick={() => resetTeacherPassword(teacher)}
+                      className="text-sm bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-3 py-1.5 rounded-md transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      {passwordResettingId === teacher.id ? "Saving..." : "Reset password"}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
       
     </div>
   );

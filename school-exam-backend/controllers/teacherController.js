@@ -12,7 +12,7 @@ exports.getAssignments = (req, res) => {
     if (!rows.length) return res.json([]);
     const tid = rows[0].id;
     db.query(
-      `SELECT ta.id, ta.class_id, ta.subject_id, c.class_name, s.subject_name
+      `SELECT ta.id, ta.class_id, ta.subject_id, c.class_name, s.subject_name, s.syllabus_link
        FROM teacher_assignments ta
        JOIN classes c ON c.id = ta.class_id
        JOIN subjects s ON s.id = ta.subject_id

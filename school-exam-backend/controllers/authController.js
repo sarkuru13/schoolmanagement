@@ -29,6 +29,13 @@ const token = jwt.sign(
 {expiresIn:"1d"}
 );
 
+req.session.user = {
+id: user.id,
+role: user.role,
+name: user.name,
+email: user.email,
+};
+
 res.json({
 token,
 role:user.role,
@@ -37,6 +44,25 @@ name:user.name
 
 });
 
+};
+
+exports.me = (req, res) => {
+if(req.session?.user){
+return res.json(req.session.user);
+}
+
+return res.status(401).json({message:"Not authenticated"});
+};
+
+exports.logout = (req, res) => {
+req.session.destroy((err) => {
+if(err){
+return res.status(500).json({message:"Could not log out"});
+}
+
+res.clearCookie("school_exam_session");
+res.json({message:"Logged out"});
+});
 };
 
 

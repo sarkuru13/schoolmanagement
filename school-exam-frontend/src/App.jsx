@@ -12,6 +12,7 @@ import Subjects from "./pages/admin/Subjects";
 import Teachers from "./pages/admin/Teachers";
 import Students from "./pages/admin/Students";
 import Results from "./pages/admin/Results";
+import ReexamRequests from "./pages/admin/ReexamRequests";
 
 // Teacher
 import TeacherDashboard from "./pages/TeacherDashboard";
@@ -27,6 +28,7 @@ import StudentDashboardHome from "./pages/student/Dashboard";
 import StudentExams from "./pages/student/Exams";
 import ExamTake from "./pages/student/ExamTake";
 import StudentResults from "./pages/student/Results";
+import StudentSubjects from "./pages/student/Subjects";
 
 export default function App() {
   return (
@@ -43,6 +45,7 @@ export default function App() {
           <Route path="teachers" element={<Teachers />} />
           <Route path="students" element={<Students />} />
           <Route path="results" element={<Results />} />
+          <Route path="reexam-requests" element={<ReexamRequests />} />
         </Route>
 
         <Route path="/teacher" element={<TeacherDashboard />}>
@@ -57,6 +60,7 @@ export default function App() {
         <Route path="/student" element={<StudentDashboard />}>
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<StudentDashboardHome />} />
+          <Route path="subjects" element={<StudentSubjects />} />
           <Route path="exams" element={<StudentExams />} />
           <Route path="exams/:id/take" element={<ExamTake />} />
           <Route path="results" element={<StudentResults />} />

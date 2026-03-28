@@ -1,14 +1,21 @@
 import { Outlet, Link, useLocation, useNavigate } from "react-router-dom";
+import API from "../api/axios";
 
 export default function TeacherDashboard() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("role");
-    localStorage.removeItem("userName");
-    navigate("/");
+  const handleLogout = async () => {
+    try {
+      await API.post("/auth/logout");
+    } catch {
+      // Ignore logout API failures and still clear local client state.
+    } finally {
+      localStorage.removeItem("token");
+      localStorage.removeItem("role");
+      localStorage.removeItem("userName");
+      navigate("/");
+    }
   };
 
   const navLinks = [

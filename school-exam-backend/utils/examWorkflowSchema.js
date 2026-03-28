@@ -31,6 +31,14 @@ async function ensureExamWorkflowSchema() {
     )
   `);
 
+  try {
+    await runQuery("ALTER TABLE subjects ADD COLUMN syllabus_link TEXT NULL");
+  } catch (error) {
+    if (error.code !== "ER_DUP_FIELDNAME") {
+      throw error;
+    }
+  }
+
   ensured = true;
 }
 
