@@ -77,6 +77,36 @@ export default function StudentDashboardHome() {
           </ul>
         )}
       </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h2 className="text-lg font-bold text-gray-900">Released results</h2>
+          <Link to="/student/results" className="text-sm text-indigo-600 font-semibold hover:underline">
+            Open all results
+          </Link>
+        </div>
+
+        {results.length === 0 ? (
+          <p className="text-gray-500 text-sm">No released exam results yet.</p>
+        ) : (
+          <ul className="divide-y divide-gray-100">
+            {results.slice(0, 5).map((result) => (
+              <li key={result.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="font-medium text-gray-900">{result.title}</p>
+                  <p className="text-xs text-gray-500">
+                    {result.class_name} · Total marks: {result.total_marks ?? "-"}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-green-700">Score: {result.score}</p>
+                  <p className="text-xs text-gray-500">Released by admin</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   );
 }

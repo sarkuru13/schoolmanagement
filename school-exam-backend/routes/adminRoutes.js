@@ -43,6 +43,7 @@ router.delete("/student/:id", auth, role("admin"), admin.deleteStudent);
 
 /* ---------- RESULT MANAGEMENT ---------- */
 
+router.get("/results-release-list", auth, role("admin"), admin.getResultReleaseList);
 router.post("/release", auth, role("admin"), admin.releaseResult);
 
 module.exports = router;

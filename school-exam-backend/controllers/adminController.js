@@ -410,6 +410,45 @@ res.json({message:"Student deleted"});
 
 /* ---------- RESULT MANAGEMENT ---------- */
 
+exports.getResultReleaseList = (req,res)=>{
+
+db.query(
+`SELECT e.id,
+        e.title,
+        e.exam_date,
+        e.total_marks,
+        c.class_name,
+        s.subject_name,
+        u.name AS teacher_name,
+        COALESCE(a.assigned_count, 0) AS assigned_count,
+        COALESCE(r.submitted_count, 0) AS submitted_count,
+        COALESCE(r.released_count, 0) AS released_count
+ FROM exams e
+ JOIN classes c ON c.id = e.class_id
+ JOIN subjects s ON s.id = e.subject_id
+ LEFT JOIN teachers t ON t.id = e.teacher_id
+ LEFT JOIN users u ON u.id = t.user_id
+ LEFT JOIN (
+   SELECT exam_id, COUNT(*) AS assigned_count
+   FROM exam_assignments
+   GROUP BY exam_id
+ ) a ON a.exam_id = e.id
+ LEFT JOIN (
+   SELECT exam_id,
+          COUNT(*) AS submitted_count,
+          SUM(CASE WHEN released = TRUE THEN 1 ELSE 0 END) AS released_count
+   FROM results
+   GROUP BY exam_id
+ ) r ON r.exam_id = e.id
+ ORDER BY e.exam_date DESC, e.id DESC`,
+(err,result)=>{
+if(err) return res.status(500).json(err);
+res.json(result);
+}
+);
+
+};
+
 exports.releaseResult = (req,res)=>{
 
 const {exam_id} = req.body;
@@ -417,8 +456,11 @@ const {exam_id} = req.body;
 db.query(
 "UPDATE results SET released=TRUE WHERE exam_id=?",
 [exam_id],
-(err)=>{
+(err,result)=>{
 if(err) return res.status(500).json(err);
+if(!result.affectedRows){
+return res.status(404).json({message:"No submitted results found for this exam"});
+}
 res.json({message:"Results released"});
 }
 );
