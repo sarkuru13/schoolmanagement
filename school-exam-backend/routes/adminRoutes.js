@@ -44,6 +44,9 @@ router.delete("/student/:id", auth, role("admin"), admin.deleteStudent);
 /* ---------- RESULT MANAGEMENT ---------- */
 
 router.get("/results-release-list", auth, role("admin"), admin.getResultReleaseList);
+router.get("/results-export", auth, role("admin"), admin.getResultsExport);
+router.get("/reexam-requests", auth, role("admin"), admin.getReexamRequests);
 router.post("/release", auth, role("admin"), admin.releaseResult);
+router.post("/reexam-requests/:id/review", auth, role("admin"), admin.reviewReexamRequest);
 
 module.exports = router;

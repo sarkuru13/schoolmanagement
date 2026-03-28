@@ -1,4 +1,5 @@
 const db = require("../config/db");
+const { ensureExamWorkflowSchema, runQuery } = require("../utils/examWorkflowSchema");
 
 function getTeacherId(userId, cb) {
   db.query("SELECT id FROM teachers WHERE user_id = ?", [userId], cb);
@@ -234,6 +235,10 @@ function assertTeacherOwnsAssignment(tid, class_id, subject_id, cb) {
   );
 }
 
+function assertTeacherOwnsExam(tid, examId, cb) {
+  db.query("SELECT * FROM exams WHERE id = ? AND teacher_id = ?", [examId, tid], cb);
+}
+
 exports.updateExam = (req, res) => {
   const examId = req.params.id;
   const userId = req.user.id;
@@ -422,6 +427,146 @@ exports.importQuestions = (req, res) => {
         );
       };
       insertNext(0);
+    });
+  });
+};
+
+exports.getExamSubmissions = (req, res) => {
+  const userId = req.user.id;
+  const examId = req.params.id;
+
+  getTeacherId(userId, async (err, rows) => {
+    if (err) return res.status(500).json(err);
+    if (!rows.length) return res.status(403).json({ message: "Not a teacher" });
+
+    const tid = rows[0].id;
+    assertTeacherOwnsExam(tid, examId, async (err2, erows) => {
+      if (err2) return res.status(500).json(err2);
+      if (!erows.length) return res.status(404).json({ message: "Exam not found" });
+
+      try {
+        await ensureExamWorkflowSchema();
+
+        const students = await runQuery(
+          `SELECT st.id,
+                  st.roll_number,
+                  u.name,
+                  u.email,
+                  r.id AS result_id,
+                  r.score,
+                  r.released,
+                  latest_request.id AS reexam_request_id,
+                  latest_request.status AS reexam_status,
+                  latest_request.reason AS reexam_reason,
+                  latest_request.admin_note AS reexam_admin_note,
+                  latest_request.requested_at AS reexam_requested_at,
+                  latest_request.reviewed_at AS reexam_reviewed_at
+           FROM (
+             SELECT DISTINCT st.id, st.roll_number, st.user_id
+             FROM students st
+             WHERE st.class_id = ?
+               AND EXISTS (
+                 SELECT 1
+                 FROM exam_assignments ea
+                 WHERE ea.exam_id = ?
+                   AND ea.class_id = ?
+               )
+             UNION
+             SELECT DISTINCT st.id, st.roll_number, st.user_id
+             FROM students st
+             JOIN exam_assignments ea ON ea.student_id = st.id
+             WHERE ea.exam_id = ?
+           ) st
+           JOIN users u ON u.id = st.user_id
+           LEFT JOIN results r ON r.exam_id = ? AND r.student_id = st.id
+           LEFT JOIN (
+             SELECT rr1.*
+             FROM reexam_requests rr1
+             INNER JOIN (
+               SELECT exam_id, student_id, MAX(id) AS latest_id
+               FROM reexam_requests
+               GROUP BY exam_id, student_id
+             ) rr2 ON rr2.latest_id = rr1.id
+           ) latest_request ON latest_request.exam_id = ? AND latest_request.student_id = st.id
+           ORDER BY u.name ASC`,
+          [
+            erows[0].class_id,
+            examId,
+            erows[0].class_id,
+            examId,
+            examId,
+            examId,
+          ]
+        );
+
+        res.json(students);
+      } catch (error) {
+        res.status(500).json({ message: error.message || "Could not load exam submissions" });
+      }
+    });
+  });
+};
+
+exports.createReexamRequest = (req, res) => {
+  const userId = req.user.id;
+  const { exam_id, student_id, reason } = req.body;
+
+  getTeacherId(userId, async (err, rows) => {
+    if (err) return res.status(500).json(err);
+    if (!rows.length) return res.status(403).json({ message: "Not a teacher" });
+
+    const tid = rows[0].id;
+    assertTeacherOwnsExam(tid, exam_id, async (err2, erows) => {
+      if (err2) return res.status(500).json(err2);
+      if (!erows.length) return res.status(404).json({ message: "Exam not found" });
+
+      try {
+        await ensureExamWorkflowSchema();
+
+        const resultRows = await runQuery(
+          "SELECT id FROM results WHERE exam_id = ? AND student_id = ?",
+          [exam_id, student_id]
+        );
+        if (!resultRows.length) {
+          return res.status(400).json({ message: "This student has not submitted the exam yet." });
+        }
+
+        const studentRows = await runQuery(
+          `SELECT st.id
+           FROM students st
+           WHERE st.id = ?
+             AND (
+               st.class_id = ?
+               OR EXISTS (
+                 SELECT 1
+                 FROM exam_assignments ea
+                 WHERE ea.exam_id = ? AND ea.student_id = st.id
+               )
+             )`,
+          [student_id, erows[0].class_id, exam_id]
+        );
+        if (!studentRows.length) {
+          return res.status(400).json({ message: "Student is not assigned to this exam." });
+        }
+
+        const pendingRows = await runQuery(
+          "SELECT id FROM reexam_requests WHERE exam_id = ? AND student_id = ? AND status = 'pending'",
+          [exam_id, student_id]
+        );
+        if (pendingRows.length) {
+          return res.status(400).json({ message: "A re-exam request is already pending for this student." });
+        }
+
+        await runQuery(
+          `INSERT INTO reexam_requests(exam_id, student_id, teacher_id, status, reason)
+           VALUES(?, ?, ?, 'pending', ?)`,
+          [exam_id, student_id, tid, (reason || "").trim() || null]
+        );
+
+        res.json({ message: "Re-exam request sent to admin for approval." });
+      } catch (error) {
+        res.status(500).json({ message: error.message || "Could not create re-exam request" });
+      }
     });
   });
 };

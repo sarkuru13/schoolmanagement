@@ -13,8 +13,11 @@ export default function ExamDetail() {
   const [data, setData] = useState(null);
   const [assignments, setAssignments] = useState([]);
   const [students, setStudents] = useState([]);
+  const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [submissionsLoading, setSubmissionsLoading] = useState(true);
+  const [reexamActionStudentId, setReexamActionStudentId] = useState(null);
 
   const [showExamEdit, setShowExamEdit] = useState(false);
   const [examSaving, setExamSaving] = useState(false);
@@ -54,24 +57,31 @@ export default function ExamDetail() {
   const [importing, setImporting] = useState(false);
 
   const load = async () => {
-    const res = await API.get(`/teacher/exams/${id}`);
-    setData(res.data);
+    const [examRes, submissionsRes] = await Promise.all([
+      API.get(`/teacher/exams/${id}`),
+      API.get(`/teacher/exams/${id}/submissions`),
+    ]);
+    setData(examRes.data);
+    setSubmissions(submissionsRes.data || []);
   };
 
   useEffect(() => {
     (async () => {
       setError("");
       try {
-        const [examRes, assignRes] = await Promise.all([
+        const [examRes, assignRes, submissionsRes] = await Promise.all([
           API.get(`/teacher/exams/${id}`),
           API.get("/teacher/assignments"),
+          API.get(`/teacher/exams/${id}/submissions`),
         ]);
         setData(examRes.data);
         setAssignments(assignRes.data || []);
+        setSubmissions(submissionsRes.data || []);
       } catch (e) {
         setError(e.response?.data?.message || "Failed to load exam.");
       } finally {
         setLoading(false);
+        setSubmissionsLoading(false);
       }
     })();
   }, [id]);
@@ -270,6 +280,31 @@ export default function ExamDetail() {
     }
   };
 
+  const handleRequestReexam = async (student) => {
+    const reason = window.prompt(
+      `Why should ${student.name} be allowed to retake this exam?`,
+      student.reexam_reason || ""
+    );
+
+    if (reason === null) return;
+
+    setReexamActionStudentId(student.id);
+    setError("");
+    try {
+      const response = await API.post("/teacher/reexam-request", {
+        exam_id: Number(id),
+        student_id: student.id,
+        reason,
+      });
+      setAssignMsg(response.data?.message || "Re-exam request sent.");
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not send re-exam request.");
+    } finally {
+      setReexamActionStudentId(null);
+    }
+  };
+
   const downloadSample = () => {
     const blob = new Blob([SAMPLE_QUESTIONS_JSON], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -465,6 +500,106 @@ export default function ExamDetail() {
           </button>
           {assignMsg && <p className="text-sm text-gray-600">{assignMsg}</p>}
         </form>
+      </section>
+
+      <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-8">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900">Submissions and re-exam approvals</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Teachers can request a re-exam for one student after submission. Admin approval is required before the
+              student can take this exam again.
+            </p>
+          </div>
+        </div>
+
+        {submissionsLoading ? (
+          <p className="text-sm text-gray-500">Loading student submissions...</p>
+        ) : submissions.length === 0 ? (
+          <p className="text-sm text-gray-500">No assigned students found for this exam yet.</p>
+        ) : (
+          <div className="overflow-x-auto border border-gray-200 rounded-lg">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-gray-600">
+                <tr>
+                  <th className="text-left px-4 py-3 font-semibold">Student</th>
+                  <th className="text-left px-4 py-3 font-semibold">Score</th>
+                  <th className="text-left px-4 py-3 font-semibold">Result</th>
+                  <th className="text-left px-4 py-3 font-semibold">Re-exam</th>
+                  <th className="text-right px-4 py-3 font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {submissions.map((student) => {
+                  const hasSubmission = Boolean(student.result_id);
+                  const pendingRequest = student.reexam_status === "pending";
+                  const approvedRequest = student.reexam_status === "approved";
+                  const rejectedRequest = student.reexam_status === "rejected";
+
+                  return (
+                    <tr key={student.id} className="border-t border-gray-100 align-top">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-gray-900">{student.name}</p>
+                        <p className="text-xs text-gray-500">
+                          Roll {student.roll_number || "-"} {student.email ? `· ${student.email}` : ""}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-gray-900 font-semibold">
+                        {hasSubmission ? `${student.score} / ${exam.total_marks}` : "-"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={`inline-flex px-2.5 py-1 rounded-full text-xs font-semibold ${
+                            hasSubmission
+                              ? student.released
+                                ? "bg-green-100 text-green-700"
+                                : "bg-amber-100 text-amber-700"
+                              : "bg-gray-100 text-gray-600"
+                          }`}
+                        >
+                          {hasSubmission ? (student.released ? "Released" : "Submitted") : "Not submitted"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <p className="text-sm text-gray-900">
+                          {pendingRequest
+                            ? "Pending admin approval"
+                            : approvedRequest
+                              ? "Approved"
+                              : rejectedRequest
+                                ? "Rejected"
+                                : "No request"}
+                        </p>
+                        {student.reexam_reason && (
+                          <p className="text-xs text-gray-500 mt-1">Reason: {student.reexam_reason}</p>
+                        )}
+                        {student.reexam_admin_note && (
+                          <p className="text-xs text-gray-500 mt-1">Admin note: {student.reexam_admin_note}</p>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          disabled={!hasSubmission || pendingRequest || reexamActionStudentId === student.id}
+                          onClick={() => handleRequestReexam(student)}
+                          className="inline-flex items-center px-3 py-2 rounded-lg bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {reexamActionStudentId === student.id
+                            ? "Sending..."
+                            : pendingRequest
+                              ? "Requested"
+                              : approvedRequest && !hasSubmission
+                                ? "Approved"
+                                : "Request re-exam"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm mb-8">

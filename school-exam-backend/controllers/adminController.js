@@ -1,5 +1,6 @@
 const db = require("../config/db");
 const bcrypt = require("bcryptjs");
+const { ensureExamWorkflowSchema, runQuery } = require("../utils/examWorkflowSchema");
 
 /* ---------- CLASS MANAGEMENT ---------- */
 
@@ -482,4 +483,173 @@ res.json({message:"Results released"});
 }
 );
 
+};
+
+exports.getResultsExport = async (req, res) => {
+  try {
+    const rows = await runQuery(
+      `SELECT r.id,
+              e.id AS exam_id,
+              e.title,
+              e.exam_date,
+              e.total_marks,
+              c.class_name,
+              s.subject_name,
+              teacher_user.name AS teacher_name,
+              student_user.name AS student_name,
+              student_user.email AS student_email,
+              st.roll_number,
+              r.score,
+              r.released
+       FROM results r
+       JOIN exams e ON e.id = r.exam_id
+       JOIN students st ON st.id = r.student_id
+       JOIN users student_user ON student_user.id = st.user_id
+       JOIN classes c ON c.id = e.class_id
+       JOIN subjects s ON s.id = e.subject_id
+       LEFT JOIN teachers t ON t.id = e.teacher_id
+       LEFT JOIN users teacher_user ON teacher_user.id = t.user_id
+       ORDER BY e.exam_date DESC, e.id DESC, student_user.name ASC`
+    );
+
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Could not prepare result export" });
+  }
+};
+
+exports.getReexamRequests = async (req, res) => {
+  try {
+    await ensureExamWorkflowSchema();
+
+    const rows = await runQuery(
+      `SELECT rr.id,
+              rr.exam_id,
+              rr.student_id,
+              rr.status,
+              rr.reason,
+              rr.admin_note,
+              rr.requested_at,
+              rr.reviewed_at,
+              e.title AS exam_title,
+              e.exam_date,
+              c.class_name,
+              s.subject_name,
+              student_user.name AS student_name,
+              student_user.email AS student_email,
+              st.roll_number,
+              teacher_user.name AS teacher_name,
+              admin_user.name AS admin_name
+       FROM reexam_requests rr
+       JOIN exams e ON e.id = rr.exam_id
+       JOIN classes c ON c.id = e.class_id
+       JOIN subjects s ON s.id = e.subject_id
+       JOIN students st ON st.id = rr.student_id
+       JOIN users student_user ON student_user.id = st.user_id
+       JOIN teachers t ON t.id = rr.teacher_id
+       JOIN users teacher_user ON teacher_user.id = t.user_id
+       LEFT JOIN users admin_user ON admin_user.id = rr.approved_by_admin_id
+       ORDER BY
+         CASE rr.status
+           WHEN 'pending' THEN 0
+           WHEN 'approved' THEN 1
+           WHEN 'rejected' THEN 2
+           ELSE 3
+         END,
+         rr.requested_at DESC`
+    );
+
+    res.json(rows);
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Could not load re-exam requests" });
+  }
+};
+
+exports.reviewReexamRequest = async (req, res) => {
+  const requestId = req.params.id;
+  const adminUserId = req.user.id;
+  const { status, admin_note } = req.body;
+
+  if (!["approved", "rejected"].includes(status)) {
+    return res.status(400).json({ message: "Status must be approved or rejected." });
+  }
+
+  try {
+    await ensureExamWorkflowSchema();
+
+    const rows = await runQuery(
+      "SELECT * FROM reexam_requests WHERE id = ? AND status = 'pending'",
+      [requestId]
+    );
+    if (!rows.length) {
+      return res.status(404).json({ message: "Pending re-exam request not found." });
+    }
+
+    const requestRow = rows[0];
+
+    if (status === "rejected") {
+      await runQuery(
+        `UPDATE reexam_requests
+         SET status = 'rejected',
+             approved_by_admin_id = ?,
+             admin_note = ?,
+             reviewed_at = NOW()
+         WHERE id = ?`,
+        [adminUserId, (admin_note || "").trim() || null, requestId]
+      );
+      return res.json({ message: "Re-exam request rejected." });
+    }
+
+    await new Promise((resolve, reject) => {
+      db.beginTransaction((transactionError) => {
+        if (transactionError) return reject(transactionError);
+
+        db.query(
+          "DELETE FROM student_answers WHERE exam_id = ? AND student_id = ?",
+          [requestRow.exam_id, requestRow.student_id],
+          (deleteAnswersError) => {
+            if (deleteAnswersError) {
+              return db.rollback(() => reject(deleteAnswersError));
+            }
+
+            db.query(
+              "DELETE FROM results WHERE exam_id = ? AND student_id = ?",
+              [requestRow.exam_id, requestRow.student_id],
+              (deleteResultError) => {
+                if (deleteResultError) {
+                  return db.rollback(() => reject(deleteResultError));
+                }
+
+                db.query(
+                  `UPDATE reexam_requests
+                   SET status = 'approved',
+                       approved_by_admin_id = ?,
+                       admin_note = ?,
+                       reviewed_at = NOW()
+                   WHERE id = ?`,
+                  [adminUserId, (admin_note || "").trim() || null, requestId],
+                  (updateError) => {
+                    if (updateError) {
+                      return db.rollback(() => reject(updateError));
+                    }
+
+                    db.commit((commitError) => {
+                      if (commitError) {
+                        return db.rollback(() => reject(commitError));
+                      }
+                      resolve();
+                    });
+                  }
+                );
+              }
+            );
+          }
+        );
+      });
+    });
+
+    res.json({ message: "Re-exam approved. The student can take the exam again now." });
+  } catch (error) {
+    res.status(500).json({ message: error.message || "Could not review re-exam request" });
+  }
 };
